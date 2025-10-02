@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>File Explorer | Legal Assistant</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        .explorer-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+            background: var(--bg-primary);
+            min-height: 100vh;
+        }
+
+        .explorer-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .explorer-header h1 {
+            color: var(--text-primary);
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .explorer-header p {
+            color: var(--text-secondary);
+            font-size: 1.1em;
+        }
+
+        .explorer-layout {
+            display: grid;
+            grid-template-columns: 300px 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        @media (max-width: 1024px) {
+            .explorer-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .files-panel, .content-panel {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .files-panel {
+            height: fit-content;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .content-panel {
+            min-height: 600px;
+        }
+
+        .panel-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .panel-title {
+            font-size: 1.4em;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 0;
+        }
+
+        .refresh-btn {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 8px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.9em;
+        }
+
+        .refresh-btn:hover {
+            background: var(--primary-dark);
+        }
+
+        .file-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+
+        .file-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin-bottom: 5px;
+            border: 1px solid transparent;
+        }
+
+        .file-item:hover {
+            background: var(--bg-tertiary);
+            border-color: var(--primary-color);
+        }
+
+        .file-item.selected {
+            background: rgba(var(--primary-rgb), 0.1);
+            border-color: var(--primary-color);
+        }
+
+        .file-icon {
+            font-size: 1.2em;
+            color: var(--primary-color);
+            margin-right: 12px;
+            width: 20px;
+            text-align: center;
+        }
+
+        .file-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .file-name {
+            font-weight: 600;
+            color: var(--text-primary);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            margin: 0 0 4px 0;
+        }
+
+        .file-meta {
+            font-size: 0.8em;
+            color: var(--text-secondary);
+            margin: 0;
+        }
+
+        .file-actions {
+            display: flex;
+            gap: 5px;
+        }
+
+        .file-action-btn {
+            background: none;
+            border: none;
+            padding: 5px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: var(--text-secondary);
+        }
+
+        .file-action-btn:hover {
+            background: var(--bg-primary);
+            color: var(--text-primary);
+        }
+
+        .delete-btn:hover {
+            color: var(--error-color);
+        }
+
+        .content-area {
+            min-height: 500px;
+        }
+
+        .content-empty {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 500px;
+            color: var(--text-secondary);
+            text-align: center;
+        }
+
+        .content-empty i {
+            font-size: 4em;
+            margin-bottom: 20px;
+            opacity: 0.5;
+        }
+
+        .content-viewer {
+            display: none;
+        }
+
+        .content-viewer.show {
+            display: block;
+        }
+
+        .content-header {
+            display: flex;
+            justify-content: between;
+            align-items: center;
+            margin-bottom: 20px;
+            padding-bottom: 15px;
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .content-info h3 {
+            margin: 0 0 5px 0;
+            color: var(--text-primary);
+            font-size: 1.3em;
+        }
+
+        .content-info p {
+            margin: 0;
+            color: var(--text-secondary);
+            font-size: 0.9em;
+        }
+
+        .content-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .action-btn {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.9em;
+        }
+
+        .edit-btn {
+            background: var(--info-color);
+            color: white;
+        }
+
+        .edit-btn:hover {
+            background: var(--info-dark);
+        }
+
+        .download-btn {
+            background: var(--success-color);
+            color: white;
+        }
+
+        .download-btn:hover {
+            background: var(--success-dark);
+        }
+
+        .delete-btn-main {
+            background: var(--error-color);
+            color: white;
+        }
+
+        .delete-btn-main:hover {
+            background: #b91c1c;
+        }
+
+        .content-body {
+            background: var(--bg-primary);
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 25px;
+            max-height: 600px;
+            overflow-y: auto;
+            line-height: 1.6;
+        }
+
+        .content-raw {
+            display: none;
+            background: var(--bg-tertiary);
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+            white-space: pre-wrap;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .content-raw.show {
+            display: block;
+        }
+
+        .loading-state {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 200px;
+            color: var(--text-secondary);
+        }
+
+        .spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid var(--primary-color);
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin-right: 15px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .nav-links {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .nav-links a {
+            color: var(--primary-color);
+            text-decoration: none;
+            margin: 0 15px;
+            font-weight: 600;
+            transition: color 0.3s ease;
+        }
+
+        .nav-links a:hover {
+            color: var(--primary-dark);
+        }
+
+        .nav-links a.active {
+            color: var(--primary-dark);
+            border-bottom: 2px solid var(--primary-dark);
+            padding-bottom: 2px;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            z-index: 1000;
+            left: 0;
+            top: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.5);
+        }
+
+        .modal.show {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: var(--bg-secondary);
+            padding: 30px;
+            border-radius: 12px;
+            max-width: 500px;
+            width: 90%;
+            text-align: center;
+        }
+
+        .modal h3 {
+            color: var(--text-primary);
+            margin-bottom: 15px;
+        }
+
+        .modal p {
+            color: var(--text-secondary);
+            margin-bottom: 25px;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+        }
+
+        .modal-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+
+        .modal-btn-confirm {
+            background: var(--error-color);
+            color: white;
+        }
+
+        .modal-btn-confirm:hover {
+            background: #b91c1c;
+        }
+
+        .modal-btn-cancel {
+            background: var(--bg-tertiary);
+            color: var(--text-primary);
+        }
+
+        .modal-btn-cancel:hover {
+            background: var(--border-color);
+        }
+
+        /* Smooth slide-in animation */
+        .slide-in-right {
+            animation: slideInRight 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        @keyframes slideInRight {
+            0% {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            100% {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideOutLeft {
+            0% {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            100% {
+                transform: translateX(-100%);
+                opacity: 0;
+            }
+        }
+
+        /* Smooth navigation links */
+        .nav-link {
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .nav-link::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .nav-link:hover::before {
+            left: 100%;
+        }
+
+        :root {
+            --primary-color: #2563eb;
+            --primary-dark: #1d4ed8;
+            --primary-rgb: 37, 99, 235;
+            --success-color: #16a34a;
+            --success-dark: #15803d;
+            --error-color: #dc2626;
+            --info-color: #0891b2;
+            --info-dark: #0e7490;
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8fafc;
+            --bg-tertiary: #f1f5f9;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --border-color: #e2e8f0;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-primary: #0f172a;
+                --bg-secondary: #1e293b;
+                --bg-tertiary: #334155;
+                --text-primary: #f8fafc;
+                --text-secondary: #94a3b8;
+                --border-color: #475569;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="explorer-container slide-in-right">
+        <!-- Navigation -->
+        <div class="nav-links">
+            <a href="/" class="nav-link" onclick="return smoothNavigate('/')">
+                <i class="fas fa-home"></i> Trang chủ
+            </a>
+            <a href="/convert" class="nav-link" onclick="return smoothNavigate('/convert')">
+                <i class="fas fa-file-upload"></i> Chuyển đổi tài liệu
+            </a>
+            <a href="/explorer" class="nav-link active">
+                <i class="fas fa-folder-open"></i> Quản lý file
+            </a>
+        </div>
+
+        <!-- Header -->
+        <div class="explorer-header">
+            <h1><i class="fas fa-folder-open"></i> Quản lý file raw_data_md</h1>
+            <p>Xem, chỉnh sửa và quản lý các file markdown đã chuyển đổi</p>
+        </div>
+
+        <!-- Main Layout -->
+        <div class="explorer-layout">
+            <!-- Files Panel -->
+            <div class="files-panel">
+                <div class="panel-header">
+                    <h2 class="panel-title">
+                        <i class="fas fa-files-o"></i>
+                        Danh sách file
+                    </h2>
+                    <button class="refresh-btn" id="refresh-btn" title="Làm mới danh sách">
+                        <i class="fas fa-sync-alt"></i>
+                    </button>
+                </div>
+
+                <div class="loading-state" id="files-loading">
+                    <div class="spinner"></div>
+                    <span>Đang tải...</span>
+                </div>
+
+                <ul class="file-list" id="file-list">
+                    <!-- Files will be loaded here -->
+                </ul>
+            </div>
+
+            <!-- Content Panel -->
+            <div class="content-panel">
+                <div class="content-empty" id="content-empty">
+                    <i class="fas fa-file-alt"></i>
+                    <h3>Chọn một file để xem nội dung</h3>
+                    <p>Click vào file trong danh sách bên trái để xem và chỉnh sửa</p>
+                </div>
+
+                <div class="content-viewer" id="content-viewer">
+                    <div class="content-header">
+                        <div class="content-info">
+                            <h3 id="current-filename">filename.md</h3>
+                            <p id="current-fileinfo">Thông tin file</p>
+                        </div>
+                        <div class="content-actions">
+                            <button class="action-btn edit-btn" id="toggle-edit-btn">
+                                <i class="fas fa-edit"></i>
+                                Xem raw
+                            </button>
+                            <button class="action-btn download-btn" id="download-current-btn">
+                                <i class="fas fa-download"></i>
+                                Tải xuống
+                            </button>
+                            <button class="action-btn delete-btn-main" id="delete-current-btn">
+                                <i class="fas fa-trash"></i>
+                                Xóa
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="content-area">
+                        <div class="loading-state" id="content-loading" style="display: none;">
+                            <div class="spinner"></div>
+                            <span>Đang tải nội dung...</span>
+                        </div>
+
+                        <div class="content-body" id="content-rendered">
+                            <!-- Rendered markdown content -->
+                        </div>
+
+                        <div class="content-raw" id="content-raw">
+                            <!-- Raw markdown content -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div class="modal" id="delete-modal">
+        <div class="modal-content">
+            <h3><i class="fas fa-exclamation-triangle"></i> Xác nhận xóa</h3>
+            <p>Bạn có chắc chắn muốn xóa file <strong id="delete-filename">filename.md</strong>?</p>
+            <p>Hành động này không thể hoàn tác.</p>
+            <div class="modal-buttons">
+                <button class="modal-btn modal-btn-confirm" id="confirm-delete-btn">
+                    <i class="fas fa-trash"></i> Xóa
+                </button>
+                <button class="modal-btn modal-btn-cancel" id="cancel-delete-btn">
+                    <i class="fas fa-times"></i> Hủy
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class FileExplorer {
+            constructor() {
+                this.fileList = document.getElementById('file-list');
+                this.filesLoading = document.getElementById('files-loading');
+                this.contentEmpty = document.getElementById('content-empty');
+                this.contentViewer = document.getElementById('content-viewer');
+                this.contentLoading = document.getElementById('content-loading');
+                this.contentRendered = document.getElementById('content-rendered');
+                this.contentRaw = document.getElementById('content-raw');
+                this.refreshBtn = document.getElementById('refresh-btn');
+                this.toggleEditBtn = document.getElementById('toggle-edit-btn');
+                this.downloadCurrentBtn = document.getElementById('download-current-btn');
+                this.deleteCurrentBtn = document.getElementById('delete-current-btn');
+                this.deleteModal = document.getElementById('delete-modal');
+                this.confirmDeleteBtn = document.getElementById('confirm-delete-btn');
+                this.cancelDeleteBtn = document.getElementById('cancel-delete-btn');
+
+                this.currentFile = null;
+                this.currentContent = '';
+                this.isRawView = false;
+                this.fileToDelete = null;
+
+                this.initEventListeners();
+                this.loadFiles();
+            }
+
+            initEventListeners() {
+                this.refreshBtn.addEventListener('click', () => this.loadFiles());
+                this.toggleEditBtn.addEventListener('click', () => this.toggleView());
+                this.downloadCurrentBtn.addEventListener('click', () => this.downloadCurrent());
+                this.deleteCurrentBtn.addEventListener('click', () => this.showDeleteModal(this.currentFile.name));
+                this.confirmDeleteBtn.addEventListener('click', () => this.confirmDelete());
+                this.cancelDeleteBtn.addEventListener('click', () => this.hideDeleteModal());
+
+                // Close modal when clicking outside
+                this.deleteModal.addEventListener('click', (e) => {
+                    if (e.target === this.deleteModal) {
+                        this.hideDeleteModal();
+                    }
+                });
+            }
+
+            async loadFiles() {
+                this.showFilesLoading();
+
+                try {
+                    const response = await fetch('/api/files');
+                    const data = await response.json();
+
+                    if (data.files) {
+                        this.renderFileList(data.files);
+                    } else {
+                        this.showError('Không thể tải danh sách file');
+                    }
+                } catch (error) {
+                    console.error('Load files error:', error);
+                    this.showError('Lỗi kết nối khi tải danh sách file');
+                }
+
+                this.hideFilesLoading();
+            }
+
+            renderFileList(files) {
+                this.fileList.innerHTML = '';
+
+                if (files.length === 0) {
+                    this.fileList.innerHTML = `
+                        <li style="text-align: center; padding: 20px; color: var(--text-secondary);">
+                            <i class="fas fa-folder-open" style="font-size: 2em; margin-bottom: 10px; display: block;"></i>
+                            Chưa có file nào
+                        </li>
+                    `;
+                    return;
+                }
+
+                files.forEach(file => {
+                    const fileItem = document.createElement('li');
+                    fileItem.className = 'file-item';
+                    fileItem.innerHTML = `
+                        <i class="fas fa-file-alt file-icon"></i>
+                        <div class="file-info">
+                            <div class="file-name">${file.name}</div>
+                            <div class="file-meta">${this.formatFileSize(file.size)} • ${this.formatDate(file.modified)}</div>
+                        </div>
+                        <div class="file-actions">
+                            <button class="file-action-btn delete-btn" title="Xóa" data-filename="${file.name}">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    `;
+
+                    // Click to view file
+                    fileItem.addEventListener('click', (e) => {
+                        if (!e.target.closest('.file-actions')) {
+                            this.selectFile(file, fileItem);
+                        }
+                    });
+
+                    // Delete button
+                    const deleteBtn = fileItem.querySelector('.delete-btn');
+                    deleteBtn.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        this.showDeleteModal(file.name);
+                    });
+
+                    this.fileList.appendChild(fileItem);
+                });
+            }
+
+            async selectFile(file, element) {
+                // Update UI selection
+                document.querySelectorAll('.file-item').forEach(item => {
+                    item.classList.remove('selected');
+                });
+                element.classList.add('selected');
+
+                this.currentFile = file;
+                this.showContentLoading();
+
+                try {
+                    const response = await fetch(`/api/files/${encodeURIComponent(file.name)}`);
+                    const data = await response.json();
+
+                    if (data.content !== undefined) {
+                        this.currentContent = data.content;
+                        this.showContent(file, data.content);
+                    } else {
+                        this.showError(data.error || 'Không thể tải nội dung file');
+                    }
+                } catch (error) {
+                    console.error('Load file content error:', error);
+                    this.showError('Lỗi kết nối khi tải nội dung file');
+                }
+
+                this.hideContentLoading();
+            }
+
+            showContent(file, content) {
+                // Update file info
+                document.getElementById('current-filename').textContent = file.name;
+                document.getElementById('current-fileinfo').textContent =
+                    `${this.formatFileSize(file.size)} • ${this.formatDate(file.modified)}`;
+
+                // Show rendered content by default
+                this.contentRendered.innerHTML = marked.parse(content);
+                this.contentRaw.textContent = content;
+
+                this.isRawView = false;
+                this.updateViewToggle();
+
+                // Show content viewer
+                this.contentEmpty.style.display = 'none';
+                this.contentViewer.classList.add('show');
+            }
+
+            toggleView() {
+                this.isRawView = !this.isRawView;
+
+                if (this.isRawView) {
+                    this.contentRendered.style.display = 'none';
+                    this.contentRaw.classList.add('show');
+                } else {
+                    this.contentRendered.style.display = 'block';
+                    this.contentRaw.classList.remove('show');
+                }
+
+                this.updateViewToggle();
+            }
+
+            updateViewToggle() {
+                const icon = this.toggleEditBtn.querySelector('i');
+                const text = this.toggleEditBtn.querySelector('.fas + span') || this.toggleEditBtn.lastChild;
+
+                if (this.isRawView) {
+                    icon.className = 'fas fa-eye';
+                    this.toggleEditBtn.innerHTML = '<i class="fas fa-eye"></i> Xem rendered';
+                } else {
+                    icon.className = 'fas fa-code';
+                    this.toggleEditBtn.innerHTML = '<i class="fas fa-code"></i> Xem raw';
+                }
+            }
+
+            downloadCurrent() {
+                if (!this.currentFile || !this.currentContent) return;
+
+                const blob = new Blob([this.currentContent], { type: 'text/markdown' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = this.currentFile.name;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            }
+
+            showDeleteModal(filename) {
+                this.fileToDelete = filename;
+                document.getElementById('delete-filename').textContent = filename;
+                this.deleteModal.classList.add('show');
+            }
+
+            hideDeleteModal() {
+                this.deleteModal.classList.remove('show');
+                this.fileToDelete = null;
+            }
+
+            async confirmDelete() {
+                if (!this.fileToDelete) return;
+
+                try {
+                    const response = await fetch(`/api/files/${encodeURIComponent(this.fileToDelete)}`, {
+                        method: 'DELETE'
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        // If current file is deleted, reset view
+                        if (this.currentFile && this.currentFile.name === this.fileToDelete) {
+                            this.contentViewer.classList.remove('show');
+                            this.contentEmpty.style.display = 'flex';
+                            this.currentFile = null;
+                            this.currentContent = '';
+                        }
+
+                        // Reload file list
+                        this.loadFiles();
+                    } else {
+                        alert('Lỗi: ' + (result.error || 'Không thể xóa file'));
+                    }
+                } catch (error) {
+                    console.error('Delete file error:', error);
+                    alert('Lỗi kết nối khi xóa file');
+                }
+
+                this.hideDeleteModal();
+            }
+
+            showFilesLoading() {
+                this.filesLoading.style.display = 'flex';
+                this.fileList.style.display = 'none';
+            }
+
+            hideFilesLoading() {
+                this.filesLoading.style.display = 'none';
+                this.fileList.style.display = 'block';
+            }
+
+            showContentLoading() {
+                this.contentLoading.style.display = 'flex';
+                this.contentRendered.style.display = 'none';
+                this.contentRaw.classList.remove('show');
+            }
+
+            hideContentLoading() {
+                this.contentLoading.style.display = 'none';
+                this.contentRendered.style.display = 'block';
+            }
+
+            formatFileSize(bytes) {
+                if (bytes === 0) return '0 Bytes';
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            }
+
+            formatDate(isoString) {
+                const date = new Date(isoString);
+                return date.toLocaleDateString('vi-VN') + ' ' +
+                       date.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' });
+            }
+
+            showError(message) {
+                console.error(message);
+                // Could add toast notification here
+            }
+        }
+
+        // Initialize the explorer
+        // Smooth navigation function
+        function smoothNavigate(url) {
+            // Add slide-out effect
+            const container = document.querySelector('.explorer-container');
+            container.style.animation = 'slideOutLeft 0.6s cubic-bezier(0.55, 0.085, 0.68, 0.53) forwards';
+            
+            // Navigate after animation
+            setTimeout(() => {
+                window.location.href = url;
+            }, 600);
+            
+            return false; // Prevent default link behavior
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            new FileExplorer();
+        });
+    </script>
+</body>
+</html>

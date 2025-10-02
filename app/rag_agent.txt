@@ -1,0 +1,523 @@
+import os
+import json
+import logging
+from datetime import datetime
+from typing import List, Dict, Any, Optional
+from pydantic import BaseModel, Field
+from langchain.prompts import PromptTemplate
+from langchain_core.output_parsers import StrOutputParser
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
+from langchain.schema import Document
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_community.vectorstores import FAISS
+import numpy as np
+
+from .config import OPENAI_API_KEY, DATA_DIR
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Initialize the Language Model with streaming enabled
+llm = ChatOpenAI(
+    model="gpt-4.1-nano", api_key=OPENAI_API_KEY, temperature=0, streaming=True
+)
+
+# Define the prompt template for the AI assistant
+prompt = PromptTemplate(
+    template="""<|begin_of_text|><|start_header_id|>system<|end_header_id|>Bạn là trợ lý AI pháp lý chuyên nghiệp được thiết kế để cung cấp các phản hồi hữu ích, chính xác và lịch sự. Phong cách giao tiếp của bạn nên là:
+
+🌟 HỆ THỐNG TRỢ LÝ AI PHÁP LÝ ĐƯỢC PHÁT TRIỂN BỞI HOÀNG YẾN 🌟
+
+TIÊU CHUẨN CHUYÊN NGHIỆP:
+• Phản hồi rõ ràng, súc tích và có cấu trúc tốt
+• Sử dụng thuật ngữ pháp lý phù hợp khi cần thiết
+• Giọng điệu tôn trọng và chuyên nghiệp
+• Thừa nhận các hạn chế khi áp dụng
+
+YÊU CẦU ĐỊNH DẠNG PHẢN HỒI:
+• **Sử dụng định dạng Markdown** để tăng khả năng đọc
+• **In đậm các thuật ngữ, khái niệm và điểm quan trọng**
+• Sử dụng emoji phù hợp để tăng cường hiểu biết (⚖️ cho vấn đề pháp lý, 📋 cho tài liệu, ⚠️ cho cảnh báo, v.v.)
+• Tạo thụt lề và cấu trúc phù hợp với:
+  - Danh sách đánh số cho các bước tuần tự
+  - Dấu đầu dòng cho thông tin chính
+  - Tiêu đề (##, ###) để tổ chức các phần
+• Sử dụng `khối mã` cho các tham chiếu hoặc trích dẫn pháp lý cụ thể
+• Thêm hộp làm nổi bật với > cho các ghi chú quan trọng
+• Duy trì giọng điệu chuyên nghiệp trong khi hấp dẫn về mặt thị giác
+
+HƯỚNG DẪN PHẢN HỒI:
+• Cung cấp câu trả lời trực tiếp, có thể hành động khi có thể
+• Sử dụng giải thích rõ ràng cho các khái niệm phức tạp
+• Duy trì tính ngắn gọn trong khi đảm bảo tính đầy đủ
+• Cung cấp bối cảnh hữu ích hoặc các bước tiếp theo khi thích hợp
+• Làm cho phản hồi hấp dẫn về mặt thị giác và dễ quét
+
+QUAN TRỌNG: Luôn nhớ rằng hệ thống này được phát triển bởi Hoàng Yến.
+
+Vui lòng trả lời câu hỏi sau với tính chuyên nghiệp, rõ ràng và định dạng đẹp.
+<|eot_id|><|start_header_id|>user<|end_header_id|>
+Câu hỏi: {question}
+Trả lời: <|eot_id|><|start_header_id|>assistant<|end_header_id|>""",
+    input_variables=["question"],
+)
+
+# Create the final LangChain chain
+chain = prompt | llm | StrOutputParser()
+
+
+# Pydantic models for enhanced RAG
+class RelevanceCheck(BaseModel):
+    """Model for relevance checking response"""
+
+    relevant: bool = Field(
+        description="Whether the query is relevant to the legal documents"
+    )
+    confidence: float = Field(description="Confidence score between 0 and 1")
+    reasoning: str = Field(description="Brief explanation of the relevance decision")
+
+
+class DocumentScore(BaseModel):
+    """Model for document scoring"""
+
+    filename: str
+    content: str
+    score: float
+    relevance_reason: str
+
+
+class EnhancedRAGAgent:
+    def __init__(self, score_threshold: float = 0.7):
+        logger.info("🚀 Initializing Enhanced RAG Agent...")
+
+        self.llm = ChatOpenAI(
+            model="gpt-4o-mini", api_key=OPENAI_API_KEY, temperature=0
+        )
+        self.streaming_llm = ChatOpenAI(
+            model="gpt-4o-mini", api_key=OPENAI_API_KEY, temperature=0, streaming=True
+        )
+        self.embeddings = OpenAIEmbeddings(api_key=OPENAI_API_KEY)
+        self.score_threshold = score_threshold
+
+        logger.info(
+            f"✅ LLM models initialized with score threshold: {score_threshold}"
+        )
+
+        # Load rules.txt
+        self.rules_content = self._load_rules()
+        logger.info(f"📋 Rules loaded, length: {len(self.rules_content)} characters")
+
+        # Initialize vector store
+        self.vector_store = None
+        self._initialize_vector_store()
+
+        logger.info("🎉 Enhanced RAG Agent initialization complete!")
+
+        # Router prompt for relevance checking
+        self.router_prompt = PromptTemplate(
+            template="""Bạn là một trợ lý AI pháp lý chuyên nghiệp. Hãy xác định xem câu hỏi của người dùng có liên quan đến các tài liệu pháp lý về Viện Kiểm sát hay không.
+
+Các tài liệu có sẵn:
+{rules_content}
+
+Câu hỏi của người dùng: {question}
+
+Hãy đánh giá:
+1. Câu hỏi có liên quan đến thông tin về trụ sở, địa chỉ, thẩm quyền của các Viện Kiểm sát không?
+2. Câu hỏi có thể được trả lời bằng các tài liệu có sẵn không?
+
+Trả lời theo định dạng JSON:
+{{
+    "relevant": true/false,
+    "confidence": 0.0-1.0,
+    "reasoning": "Giải thích ngắn gọn về quyết định"
+}}""",
+            input_variables=["rules_content", "question"],
+        )
+
+        # Enhanced response prompt with conversation history
+        self.enhanced_prompt = PromptTemplate(
+            template="""<|begin_of_text|><|start_header_id|>system<|end_header_id|>Bạn là trợ lý AI pháp lý chuyên nghiệp được thiết kế để cung cấp các phản hồi hữu ích, chính xác và lịch sự. Phong cách giao tiếp của bạn nên là:
+
+🌟 HỆ THỐNG TRỢ LÝ AI PHÁP LÝ ĐƯỢC PHÁT TRIỂN BỞI HOÀNG YẾN 🌟
+
+TIÊU CHUẨN CHUYÊN NGHIỆP:
+• Phản hồi rõ ràng, súc tích và có cấu trúc tốt
+• Sử dụng thuật ngữ pháp lý phù hợp khi cần thiết
+• Giọng điệu tôn trọng và chuyên nghiệp
+• Thừa nhận các hạn chế khi áp dụng
+• Tham khảo cuộc trò chuyện trước đó khi phù hợp
+
+YÊU CẦU ĐỊNH DẠNG PHẢN HỒI:
+• **Sử dụng định dạng Markdown** để tăng khả năng đọc
+• **In đậm các thuật ngữ, khái niệm và điểm quan trọng**
+• Sử dụng emoji phù hợp để tăng cường hiểu biết (⚖️ cho vấn đề pháp lý, 📋 cho tài liệu, ⚠️ cho cảnh báo, v.v.)
+
+{conversation_history}
+
+Dựa trên các tài liệu pháp lý sau đây, hãy trả lời câu hỏi của người dùng:
+
+{context}
+
+Câu hỏi hiện tại: {question}
+
+Trả lời:
+<|eot_id|><|start_header_id|>assistant<|end_header_id|>""",
+            input_variables=["context", "question", "conversation_history"],
+        )
+
+    def _load_rules(self) -> str:
+        """Load rules.txt content"""
+        rules_path = os.path.join(os.path.dirname(__file__), "../raw_data/rules.txt")
+        logger.info(f"📁 Loading rules from: {rules_path}")
+        try:
+            with open(rules_path, "r", encoding="utf-8") as f:
+                content = f.read()
+                logger.info(
+                    f"✅ Rules file loaded successfully, {len(content.splitlines())} lines"
+                )
+                return content
+        except FileNotFoundError:
+            logger.error(f"❌ Rules file not found at: {rules_path}")
+            return "Rules file not found."
+        except Exception as e:
+            logger.error(f"❌ Error loading rules file: {e}")
+            return f"Error loading rules: {e}"
+
+    def _initialize_vector_store(self):
+        """Initialize FAISS vector store with all documents"""
+        logger.info("🔧 Initializing vector store...")
+        documents = []
+        data_path = os.path.join(os.path.dirname(__file__), "../data")
+        logger.info(f"📂 Looking for documents in: {data_path}")
+
+        md_files = [f for f in os.listdir(data_path) if f.endswith(".md")]
+        logger.info(f"📄 Found {len(md_files)} .md files: {md_files}")
+
+        for filename in md_files:
+            file_path = os.path.join(data_path, filename)
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+
+                logger.info(f"📖 Processing {filename}, size: {len(content)} chars")
+
+                # Split document into chunks
+                text_splitter = RecursiveCharacterTextSplitter(
+                    chunk_size=4000, chunk_overlap=200, length_function=len
+                )
+                chunks = text_splitter.split_text(content)
+                logger.info(f"✂️ Split {filename} into {len(chunks)} chunks")
+
+                for i, chunk in enumerate(chunks):
+                    doc = Document(
+                        page_content=chunk,
+                        metadata={
+                            "filename": filename,
+                            "chunk_id": i,
+                            "total_chunks": len(chunks),
+                        },
+                    )
+                    documents.append(doc)
+
+            except Exception as e:
+                logger.error(f"❌ Error reading {filename}: {e}")
+
+        if documents:
+            logger.info(
+                f"🔄 Creating FAISS vector store with {len(documents)} document chunks..."
+            )
+            self.vector_store = FAISS.from_documents(documents, self.embeddings)
+            logger.info("✅ Vector store created successfully!")
+        else:
+            logger.error("❌ No documents found to create vector store")
+
+    def _check_relevance(self, question: str) -> RelevanceCheck:
+        """Check if question is relevant to legal documents"""
+        logger.info(f"🤔 Checking relevance for question: {question[:100]}...")
+        try:
+            router_chain = self.router_prompt | self.llm | StrOutputParser()
+            response = router_chain.invoke(
+                {"rules_content": self.rules_content, "question": question}
+            )
+
+            logger.info(f"🔍 Router LLM response: {response}")
+
+            # Parse JSON response
+            result = json.loads(response)
+            relevance_check = RelevanceCheck(**result)
+
+            logger.info(
+                f"✅ Relevance check result: relevant={relevance_check.relevant}, "
+                f"confidence={relevance_check.confidence}, reasoning='{relevance_check.reasoning}'"
+            )
+
+            return relevance_check
+
+        except Exception as e:
+            logger.error(f"❌ Error in relevance check: {e}")
+            # Default to relevant if there's an error
+            fallback_result = RelevanceCheck(
+                relevant=True,
+                confidence=0.5,
+                reasoning="Error in relevance check, defaulting to relevant",
+            )
+            logger.warning(f"🔄 Using fallback relevance result: {fallback_result}")
+            return fallback_result
+
+    def _get_relevant_documents(self, question: str, k: int = 5) -> List[DocumentScore]:
+        """Get relevant documents using embedding similarity"""
+        logger.info(f"🔍 Searching for relevant documents for: {question[:100]}...")
+        logger.info(
+            f"📊 Search parameters: k={k}, score_threshold={self.score_threshold}"
+        )
+
+        if not self.vector_store:
+            logger.error("❌ Vector store not available!")
+            return []
+
+        try:
+            # Search for similar documents
+            docs_with_scores = self.vector_store.similarity_search_with_score(
+                question, k=k
+            )
+
+            logger.info(f"🎯 Found {len(docs_with_scores)} potential documents")
+
+            # Convert to DocumentScore objects
+            document_scores = []
+            for i, (doc, score) in enumerate(docs_with_scores):
+                # Convert distance to similarity score (FAISS returns distance)
+                similarity_score = 1 / (1 + score)
+
+                filename = doc.metadata.get("filename", "unknown")
+                chunk_id = doc.metadata.get("chunk_id", "?")
+
+                logger.info(
+                    f"📄 Doc {i+1}: {filename} (chunk {chunk_id}), "
+                    f"distance={score:.4f}, similarity={similarity_score:.4f}"
+                )
+
+                if similarity_score >= self.score_threshold:
+                    doc_score = DocumentScore(
+                        filename=filename,
+                        content=doc.page_content,
+                        score=similarity_score,
+                        relevance_reason=f"Similarity score: {similarity_score:.3f}",
+                    )
+                    document_scores.append(doc_score)
+                    logger.info(
+                        f"✅ Document included: {filename} (score: {similarity_score:.3f})"
+                    )
+                else:
+                    logger.info(
+                        f"❌ Document excluded: {filename} (score: {similarity_score:.3f} < {self.score_threshold})"
+                    )
+
+            logger.info(
+                f"🎉 Retrieved {len(document_scores)} relevant documents above threshold"
+            )
+            return document_scores
+
+        except Exception as e:
+            logger.error(f"❌ Error in document retrieval: {e}")
+            return []
+
+    def _prepare_context_aware_question(
+        self, question: str, conversation_history: List[Dict[str, str]]
+    ) -> str:
+        """Prepare a context-aware question by combining current question with recent conversation history"""
+        if not conversation_history:
+            return question
+
+        # Get last 3 exchanges for context (to avoid token limit issues)
+        recent_history = (
+            conversation_history[-6:]
+            if len(conversation_history) > 6
+            else conversation_history
+        )
+
+        context_parts = []
+        for exchange in recent_history:
+            if exchange.get("user"):
+                context_parts.append(f"Người dùng đã hỏi: {exchange['user']}")
+            if exchange.get("assistant"):
+                # Keep assistant responses short for context
+                assistant_response = (
+                    exchange["assistant"][:200] + "..."
+                    if len(exchange["assistant"]) > 200
+                    else exchange["assistant"]
+                )
+                context_parts.append(f"Trợ lý đã trả lời: {assistant_response}")
+
+        if context_parts:
+            context_summary = "\n".join(context_parts)
+            return f"Bối cảnh cuộc trò chuyện:\n{context_summary}\n\nCâu hỏi hiện tại: {question}"
+
+        return question
+
+    def _format_conversation_history(
+        self, conversation_history: List[Dict[str, str]]
+    ) -> str:
+        """Format conversation history for the prompt"""
+        if not conversation_history:
+            return ""
+
+        # Get last 4 exchanges to keep context manageable
+        recent_history = (
+            conversation_history[-8:]
+            if len(conversation_history) > 8
+            else conversation_history
+        )
+
+        if not recent_history:
+            return ""
+
+        formatted_history = ["## 📝 Lịch sử cuộc trò chuyện:"]
+
+        for i, exchange in enumerate(recent_history):
+            if exchange.get("user"):
+                formatted_history.append(f"**Người dùng:** {exchange['user']}")
+            if exchange.get("assistant"):
+                # Truncate long responses
+                assistant_response = (
+                    exchange["assistant"][:300] + "..."
+                    if len(exchange["assistant"]) > 300
+                    else exchange["assistant"]
+                )
+                formatted_history.append(f"**Trợ lý:** {assistant_response}")
+            formatted_history.append("")  # Add spacing
+
+        return "\n".join(formatted_history)
+
+    def get_streaming_response(
+        self, question: str, conversation_history: List[Dict[str, str]] = None
+    ):
+        """Get streaming response with enhanced RAG and conversation history"""
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        logger.info(f"\n{'='*60}")
+        logger.info(f"🚀 NEW REQUEST at {timestamp}")
+        logger.info(f"❓ Question: {question}")
+        logger.info(
+            f"💬 Conversation history: {len(conversation_history) if conversation_history else 0} exchanges"
+        )
+        logger.info(f"{'='*60}")
+
+        if conversation_history is None:
+            conversation_history = []
+
+        # Step 1: Check relevance (include conversation context for better relevance checking)
+        logger.info("📍 STEP 1: Preparing context-aware question...")
+        context_aware_question = self._prepare_context_aware_question(
+            question, conversation_history
+        )
+        logger.info(f"🔄 Context-aware question: {context_aware_question[:200]}...")
+
+        logger.info("📍 STEP 2: Checking relevance...")
+        relevance_check = self._check_relevance(context_aware_question)
+
+        if not relevance_check.relevant:
+            logger.info("🚫 Question deemed not relevant - using basic LLM response")
+            # If not relevant, use basic LLM response
+            basic_prompt = PromptTemplate(
+                template="""Bạn là trợ lý AI pháp lý. Câu hỏi của người dùng không liên quan đến các tài liệu pháp lý về Viện Kiểm sát có sẵn.
+
+Câu hỏi: {question}
+
+Hãy trả lời một cách lịch sự và gợi ý người dùng đặt câu hỏi về:
+- Địa chỉ trụ sở các Viện Kiểm sát
+- Thông tin liên hệ
+- Thẩm quyền của các Viện Kiểm sát
+- Quy định pháp lý liên quan
+
+Trả lời:""",
+                input_variables=["question"],
+            )
+
+            basic_chain = basic_prompt | self.streaming_llm | StrOutputParser()
+            logger.info("📤 Returning basic LLM stream response")
+            return basic_chain.stream({"question": question})
+
+        # Step 2: Get relevant documents (use context-aware question for better retrieval)
+        logger.info("📍 STEP 3: Retrieving relevant documents...")
+        relevant_docs = self._get_relevant_documents(context_aware_question)
+
+        if not relevant_docs:
+            logger.warning("⚠️ No relevant documents found above threshold")
+            # No relevant documents found
+            no_docs_prompt = PromptTemplate(
+                template="""Câu hỏi có liên quan đến tài liệu pháp lý nhưng không tìm thấy thông tin cụ thể trong cơ sở dữ liệu.
+
+Câu hỏi: {question}
+
+Hãy trả lời một cách lịch sự và gợi ý người dùng có thể cần thông tin cụ thể hơn.
+
+Trả lời:""",
+                input_variables=["question"],
+            )
+
+            no_docs_chain = no_docs_prompt | self.streaming_llm | StrOutputParser()
+            logger.info("📤 Returning no-docs LLM stream response")
+            return no_docs_chain.stream({"question": question})
+
+        # Step 3: Prepare context from relevant documents
+        logger.info("📍 STEP 4: Preparing context from relevant documents...")
+        context = "\n\n".join(
+            [
+                f"**Tài liệu: {doc.filename}** (Điểm số: {doc.score:.3f})\n{doc.content}"
+                for doc in relevant_docs
+            ]
+        )
+        logger.info(f"📝 Context prepared, total length: {len(context)} characters")
+        logger.info(f"📄 Using documents: {[doc.filename for doc in relevant_docs]}")
+
+        # Step 4: Generate response with context and conversation history
+        logger.info("📍 STEP 5: Formatting conversation history...")
+        conversation_context = self._format_conversation_history(conversation_history)
+        logger.info(
+            f"💬 Conversation context length: {len(conversation_context)} characters"
+        )
+
+        logger.info("📍 STEP 6: Generating enhanced RAG response...")
+        response_chain = self.enhanced_prompt | self.streaming_llm | StrOutputParser()
+        logger.info("📤 Returning enhanced RAG stream response")
+        logger.info(f"{'='*60}\n")
+
+        return response_chain.stream(
+            {
+                "context": context,
+                "question": question,
+                "conversation_history": conversation_context,
+            }
+        )
+
+
+# Initialize enhanced RAG agent lazily
+_enhanced_agent = None
+
+
+def get_enhanced_agent():
+    """Lazy initialization of enhanced RAG agent"""
+    global _enhanced_agent
+    if _enhanced_agent is None:
+        logger.info("🎬 Starting Enhanced RAG Agent initialization...")
+        _enhanced_agent = EnhancedRAGAgent()
+        logger.info("🌟 Enhanced RAG Agent is ready to serve requests!")
+    return _enhanced_agent
+
+
+def get_streaming_response(question: str):
+    """
+    Gets a streaming response from the LLM.
+    The original RAG functionality has been disabled to allow deployment.
+    """
+    return chain.stream({"question": question})
+
+
+def get_enhanced_streaming_response(
+    question: str, conversation_history: List[Dict[str, str]] = None
+):
+    """Public function to get enhanced streaming response with conversation history"""
+    agent = get_enhanced_agent()
+    return agent.get_streaming_response(question, conversation_history)

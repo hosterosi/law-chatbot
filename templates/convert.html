@@ -1,0 +1,1232 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document Converter | Legal Assistant</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        .converter-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: var(--bg-primary);
+        }
+
+        .converter-header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .converter-header h1 {
+            color: var(--text-primary);
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .converter-header p {
+            color: var(--text-secondary);
+            font-size: 1.1em;
+        }
+
+        .converter-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 30px;
+            margin-bottom: 30px;
+        }
+
+        @media (max-width: 768px) {
+            .converter-layout {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .upload-section, .preview-section {
+            background: var(--bg-secondary);
+            border-radius: 12px;
+            padding: 25px;
+            box-shadow: 0 4px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .section-title {
+            font-size: 1.4em;
+            color: var(--text-primary);
+            margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .upload-area {
+            border: 2px dashed var(--primary-color);
+            border-radius: 12px;
+            padding: 40px 20px;
+            text-align: center;
+            transition: all 0.3s ease;
+            cursor: pointer;
+        }
+
+        .upload-area:hover {
+            border-color: var(--primary-dark);
+            background: rgba(var(--primary-rgb), 0.05);
+        }
+
+        .upload-area.dragover {
+            border-color: var(--primary-dark);
+            background: rgba(var(--primary-rgb), 0.1);
+        }
+
+        .upload-icon {
+            font-size: 3em;
+            color: var(--primary-color);
+            margin-bottom: 15px;
+        }
+
+        .upload-text {
+            color: var(--text-primary);
+            font-size: 1.2em;
+            margin-bottom: 10px;
+        }
+
+        .upload-hint {
+            color: var(--text-secondary);
+            font-size: 0.9em;
+        }
+
+        #file-input {
+            display: none;
+        }
+
+        .file-info {
+            display: none;
+            background: var(--bg-tertiary);
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+        }
+
+        .file-info.show {
+            display: block;
+        }
+
+        .file-details {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .file-icon {
+            font-size: 2em;
+            color: var(--primary-color);
+        }
+
+        .file-meta h4 {
+            margin: 0;
+            color: var(--text-primary);
+        }
+
+        .file-meta p {
+            margin: 0;
+            color: var(--text-secondary);
+            font-size: 0.9em;
+        }
+
+        .convert-button {
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 8px;
+            font-size: 1em;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .convert-button:hover:not(:disabled) {
+            background: var(--primary-dark);
+            transform: translateY(-2px);
+        }
+
+        .convert-button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .processing-status {
+            display: none;
+            text-align: center;
+            padding: 40px 20px;
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            border-radius: 16px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .processing-status.show {
+            display: block;
+        }
+
+        .processing-animation {
+            margin-bottom: 24px;
+            position: relative;
+        }
+
+        .processing-icon {
+            font-size: 3rem;
+            color: var(--primary-color);
+            margin-bottom: 16px;
+            animation: pulse 2s infinite;
+        }
+
+        .processing-dots {
+            display: flex;
+            justify-content: center;
+            gap: 8px;
+        }
+
+        .processing-dots span {
+            width: 8px;
+            height: 8px;
+            background: var(--primary-color);
+            border-radius: 50%;
+            animation: processingDots 1.4s infinite ease-in-out;
+        }
+
+        .processing-dots span:nth-child(1) { animation-delay: -0.32s; }
+        .processing-dots span:nth-child(2) { animation-delay: -0.16s; }
+
+        @keyframes processingDots {
+            0%, 80%, 100% { transform: scale(0.8); opacity: 0.5; }
+            40% { transform: scale(1); opacity: 1; }
+        }
+
+        .processing-status h3 {
+            font-size: 1.5rem;
+            color: var(--text-primary);
+            margin-bottom: 8px;
+            font-weight: 600;
+        }
+
+        .processing-description {
+            color: var(--text-secondary);
+            margin-bottom: 32px;
+            font-size: 1rem;
+        }
+
+        .processing-steps {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 24px;
+            position: relative;
+        }
+
+        .processing-steps::before {
+            content: '';
+            position: absolute;
+            top: 20px;
+            left: 10%;
+            right: 10%;
+            height: 2px;
+            background: #e2e8f0;
+            z-index: 1;
+        }
+
+        .step {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            position: relative;
+            z-index: 2;
+            flex: 1;
+        }
+
+        .step i {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #e2e8f0;
+            color: #64748b;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 16px;
+            transition: all 0.3s ease;
+        }
+
+        .step.active i {
+            background: var(--primary-color);
+            color: white;
+            animation: stepPulse 2s infinite;
+        }
+
+        .step.completed i {
+            background: var(--success-color);
+            color: white;
+        }
+
+        .step span {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            text-align: center;
+            font-weight: 500;
+        }
+
+        .step.active span {
+            color: var(--text-primary);
+            font-weight: 600;
+        }
+
+        .progress-bar {
+            width: 100%;
+            height: 8px;
+            background: #e2e8f0;
+            border-radius: 4px;
+            overflow: hidden;
+            margin-bottom: 16px;
+        }
+
+        .progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary-color), var(--primary-light));
+            border-radius: 4px;
+            width: 0%;
+            transition: width 0.5s ease;
+            animation: progressShimmer 2s infinite;
+        }
+
+        @keyframes progressShimmer {
+            0% { background-position: -200% 0; }
+            100% { background-position: 200% 0; }
+        }
+
+        .processing-note {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+            font-style: italic;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.8; }
+        }
+
+        @keyframes stepPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        /* Smooth slide-in animation */
+        .slide-in-right {
+            animation: slideInRight 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
+        }
+
+        @keyframes slideInRight {
+            0% {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            100% {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        @keyframes slideOutLeft {
+            0% {
+                transform: translateX(0);
+                opacity: 1;
+            }
+            100% {
+                transform: translateX(-100%);
+                opacity: 0;
+            }
+        }
+
+        /* Page transition effects */
+        .converter-container {
+            transform: translateX(0);
+            transition: transform 0.3s ease;
+        }
+
+        /* Smooth navigation links */
+        .nav-link {
+            position: relative;
+            overflow: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .nav-link::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+
+        .nav-link:hover::before {
+            left: 100%;
+        }
+
+        .preview-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .preview-controls {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .view-toggle {
+            display: flex;
+            background: #f1f5f9;
+            border-radius: 8px;
+            padding: 4px;
+            border: 1px solid #e2e8f0;
+        }
+
+        .toggle-btn {
+            background: none;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #64748b;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .toggle-btn.active {
+            background: white;
+            color: var(--primary-color);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .toggle-btn:hover:not(.active) {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.5);
+        }
+
+        .preview-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .edit-save-btn {
+            background: var(--success-color);
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .edit-save-btn:hover {
+            background: var(--success-dark);
+            transform: translateY(-1px);
+        }
+
+        .preview-content-container {
+            position: relative;
+            min-height: 400px;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            overflow: hidden;
+            background: var(--bg-primary);
+        }
+
+        .preview-content {
+            min-height: 400px;
+            padding: 24px;
+            overflow-y: auto;
+            word-wrap: break-word;
+            word-break: break-word;
+            line-height: 1.6;
+            font-size: 0.95rem;
+        }
+
+        .preview-content h1,
+        .preview-content h2,
+        .preview-content h3,
+        .preview-content h4,
+        .preview-content h5,
+        .preview-content h6 {
+            margin-top: 24px;
+            margin-bottom: 16px;
+            font-weight: 600;
+            line-height: 1.3;
+            color: var(--text-primary);
+        }
+
+        .preview-content h1 { font-size: 1.875rem; }
+        .preview-content h2 { font-size: 1.5rem; }
+        .preview-content h3 { font-size: 1.25rem; }
+
+        .preview-content p {
+            margin-bottom: 16px;
+            line-height: 1.7;
+        }
+
+        .preview-content ul,
+        .preview-content ol {
+            margin: 16px 0;
+            padding-left: 24px;
+        }
+
+        .preview-content li {
+            margin-bottom: 8px;
+        }
+
+        .preview-content blockquote {
+            border-left: 4px solid var(--primary-color);
+            padding-left: 16px;
+            margin: 16px 0;
+            color: var(--text-secondary);
+            font-style: italic;
+            background: rgba(59, 130, 246, 0.05);
+            padding: 16px;
+            border-radius: 0 8px 8px 0;
+        }
+
+        .preview-content code {
+            background: rgba(59, 130, 246, 0.1);
+            color: var(--primary-dark);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.875rem;
+        }
+
+        .preview-content pre {
+            background: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 16px;
+            overflow-x: auto;
+            margin: 16px 0;
+        }
+
+        .preview-content pre code {
+            background: none;
+            padding: 0;
+            color: var(--text-primary);
+        }
+
+        .preview-content table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            border: 1px solid #e2e8f0;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+
+        .preview-content th,
+        .preview-content td {
+            padding: 12px 16px;
+            border-bottom: 1px solid #e2e8f0;
+            text-align: left;
+        }
+
+        .preview-content th {
+            background: #f8fafc;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+
+        .preview-empty {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            min-height: 400px;
+            color: var(--text-secondary);
+            text-align: center;
+            padding: 40px;
+        }
+
+        .preview-empty i {
+            font-size: 3em;
+            margin-bottom: 16px;
+            opacity: 0.5;
+            color: var(--primary-color);
+        }
+
+        .raw-edit-content {
+            height: 400px;
+            position: relative;
+        }
+
+        #markdown-editor {
+            width: 100%;
+            height: 100%;
+            border: none;
+            padding: 24px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.875rem;
+            line-height: 1.5;
+            resize: none;
+            outline: none;
+            background: #fafafa;
+            color: var(--text-primary);
+            word-wrap: break-word;
+            word-break: break-word;
+        }
+
+        #markdown-editor:focus {
+            background: white;
+            box-shadow: inset 0 0 0 2px var(--primary-color);
+        }
+
+        .action-buttons {
+            display: none;
+            gap: 15px;
+            margin-top: 20px;
+            justify-content: center;
+        }
+
+        .action-buttons.show {
+            display: flex;
+        }
+
+        .action-btn {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 6px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .save-btn {
+            background: var(--success-color);
+            color: white;
+        }
+
+        .save-btn:hover {
+            background: var(--success-dark);
+        }
+
+        .download-btn {
+            background: var(--info-color);
+            color: white;
+        }
+
+        .download-btn:hover {
+            background: var(--info-dark);
+        }
+
+        .error-message {
+            background: var(--error-color);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            display: none;
+        }
+
+        .error-message.show {
+            display: block;
+        }
+
+        .success-message {
+            background: var(--success-color);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 15px;
+            display: none;
+        }
+
+        .success-message.show {
+            display: block;
+        }
+
+        .nav-links {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .nav-links a {
+            color: var(--primary-color);
+            text-decoration: none;
+            margin: 0 15px;
+            font-weight: 600;
+            transition: color 0.3s ease;
+        }
+
+        .nav-links a:hover {
+            color: var(--primary-dark);
+        }
+
+        .nav-links a.active {
+            color: var(--primary-dark);
+            border-bottom: 2px solid var(--primary-dark);
+            padding-bottom: 2px;
+        }
+
+        :root {
+            --primary-color: #2563eb;
+            --primary-dark: #1d4ed8;
+            --primary-rgb: 37, 99, 235;
+            --success-color: #16a34a;
+            --success-dark: #15803d;
+            --error-color: #dc2626;
+            --info-color: #0891b2;
+            --info-dark: #0e7490;
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8fafc;
+            --bg-tertiary: #f1f5f9;
+            --text-primary: #1e293b;
+            --text-secondary: #64748b;
+            --border-color: #e2e8f0;
+        }
+
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg-primary: #0f172a;
+                --bg-secondary: #1e293b;
+                --bg-tertiary: #334155;
+                --text-primary: #f8fafc;
+                --text-secondary: #94a3b8;
+                --border-color: #475569;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="converter-container slide-in-right">
+        <!-- Navigation -->
+        <div class="nav-links">
+            <a href="/" class="nav-link" onclick="return smoothNavigate('/')">
+                <i class="fas fa-home"></i> Trang chủ
+            </a>
+            <a href="/convert" class="nav-link active">
+                <i class="fas fa-file-upload"></i> Chuyển đổi tài liệu
+            </a>
+            <a href="/explorer" class="nav-link" onclick="return smoothNavigate('/explorer')">
+                <i class="fas fa-folder-open"></i> Quản lý file
+            </a>
+        </div>
+
+        <!-- Header -->
+        <div class="converter-header">
+            <h1><i class="fas fa-file-upload"></i> Chuyển đổi tài liệu</h1>
+            <p>Tải lên và chuyển đổi tài liệu PDF, TXT, DOC, DOCX sang định dạng Markdown</p>
+        </div>
+
+        <!-- Main Layout -->
+        <div class="converter-layout">
+            <!-- Upload Section -->
+            <div class="upload-section">
+                <h2 class="section-title">
+                    <i class="fas fa-upload"></i>
+                    Tải lên tài liệu
+                </h2>
+
+                <div class="upload-area" id="upload-area">
+                    <div class="upload-icon">
+                        <i class="fas fa-cloud-upload-alt"></i>
+                    </div>
+                    <div class="upload-text">
+                        Kéo thả file vào đây hoặc click để chọn
+                    </div>
+                    <div class="upload-hint">
+                        Hỗ trợ: PDF, TXT, DOC, DOCX (Tối đa 10MB)
+                    </div>
+                </div>
+
+                <input type="file" id="file-input" accept=".pdf,.txt,.doc,.docx">
+
+                <div class="file-info" id="file-info">
+                    <div class="file-details">
+                        <div class="file-icon">
+                            <i class="fas fa-file" id="file-icon"></i>
+                        </div>
+                        <div class="file-meta">
+                            <h4 id="file-name">Filename</h4>
+                            <p id="file-size">Size</p>
+                        </div>
+                    </div>
+                    <button class="convert-button" id="convert-button" disabled>
+                        <i class="fas fa-magic"></i>
+                        Chuyển đổi sang Markdown
+                    </button>
+                </div>
+
+                <div class="processing-status" id="processing-status">
+                    <div class="processing-animation">
+                        <div class="processing-icon">
+                            <i class="fas fa-cogs"></i>
+                        </div>
+                        <div class="processing-dots">
+                            <span></span>
+                            <span></span>
+                            <span></span>
+                        </div>
+                    </div>
+                    <h3>Đang xử lý tài liệu...</h3>
+                    <p class="processing-description">Đang phân tích và chuyển đổi nội dung của bạn</p>
+                    <div class="processing-steps">
+                        <div class="step active" data-step="1">
+                            <i class="fas fa-upload"></i>
+                            <span>Tải lên file</span>
+                        </div>
+                        <div class="step" data-step="2">
+                            <i class="fas fa-search"></i>
+                            <span>Phân tích nội dung</span>
+                        </div>
+                        <div class="step" data-step="3">
+                            <i class="fas fa-magic"></i>
+                            <span>Chuyển đổi sang Markdown</span>
+                        </div>
+                        <div class="step" data-step="4">
+                            <i class="fas fa-check"></i>
+                            <span>Hoàn thành</span>
+                        </div>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill"></div>
+                    </div>
+                    <small class="processing-note">Có thể mất vài phút đối với file PDF được scan</small>
+                </div>
+
+                <div class="error-message" id="error-message"></div>
+                <div class="success-message" id="success-message"></div>
+            </div>
+
+            <!-- Preview Section -->
+            <div class="preview-section">
+                <div class="preview-header">
+                    <h2 class="section-title">
+                        <i class="fas fa-eye"></i>
+                        Xem trước Markdown
+                    </h2>
+                    <div class="preview-controls">
+                        <div class="view-toggle">
+                            <button class="toggle-btn active" data-view="html">
+                                <i class="fas fa-eye"></i>
+                                HTML View
+                            </button>
+                            <button class="toggle-btn" data-view="raw">
+                                <i class="fas fa-code"></i>
+                                Raw Edit
+                            </button>
+                        </div>
+                        <div class="preview-actions">
+                            <button class="action-btn edit-save-btn" id="edit-save-btn" style="display: none;">
+                                <i class="fas fa-save"></i>
+                                Lưu thay đổi
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="preview-content-container">
+                    <div class="preview-content" id="preview-content">
+                        <div class="preview-empty">
+                            <i class="fas fa-file-alt"></i>
+                            <p>Nội dung markdown sẽ hiển thị ở đây sau khi chuyển đổi</p>
+                        </div>
+                    </div>
+                    <div class="raw-edit-content" id="raw-edit-content" style="display: none;">
+                        <textarea id="markdown-editor" placeholder="Nội dung markdown sẽ hiển thị ở đây..."></textarea>
+                    </div>
+                </div>
+
+                <div class="action-buttons" id="action-buttons">
+                    <button class="action-btn save-btn" id="save-btn">
+                        <i class="fas fa-save"></i>
+                        Lưu vào raw_data_md
+                    </button>
+                    <button class="action-btn download-btn" id="download-btn">
+                        <i class="fas fa-download"></i>
+                        Tải xuống
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class DocumentConverter {
+            constructor() {
+                this.uploadArea = document.getElementById('upload-area');
+                this.fileInput = document.getElementById('file-input');
+                this.fileInfo = document.getElementById('file-info');
+                this.convertButton = document.getElementById('convert-button');
+                this.processingStatus = document.getElementById('processing-status');
+                this.previewContent = document.getElementById('preview-content');
+                this.rawEditContent = document.getElementById('raw-edit-content');
+                this.markdownEditor = document.getElementById('markdown-editor');
+                this.actionButtons = document.getElementById('action-buttons');
+                this.errorMessage = document.getElementById('error-message');
+                this.successMessage = document.getElementById('success-message');
+                this.saveBtn = document.getElementById('save-btn');
+                this.downloadBtn = document.getElementById('download-btn');
+                this.editSaveBtn = document.getElementById('edit-save-btn');
+                this.toggleButtons = document.querySelectorAll('.toggle-btn');
+
+                this.currentFile = null;
+                this.currentMarkdown = '';
+                this.currentFilename = '';
+                this.isEditing = false;
+                this.currentView = 'html';
+
+                this.initEventListeners();
+            }
+
+            initEventListeners() {
+                // Upload area events
+                this.uploadArea.addEventListener('click', () => this.fileInput.click());
+                this.uploadArea.addEventListener('dragover', this.handleDragOver.bind(this));
+                this.uploadArea.addEventListener('drop', this.handleDrop.bind(this));
+                this.uploadArea.addEventListener('dragleave', this.handleDragLeave.bind(this));
+
+                // File input change
+                this.fileInput.addEventListener('change', this.handleFileSelect.bind(this));
+
+                // Convert button
+                this.convertButton.addEventListener('click', this.convertDocument.bind(this));
+
+                // Action buttons
+                this.saveBtn.addEventListener('click', this.saveToRawDataMd.bind(this));
+                this.downloadBtn.addEventListener('click', this.downloadMarkdown.bind(this));
+                this.editSaveBtn.addEventListener('click', this.saveMarkdownChanges.bind(this));
+
+                // Toggle buttons
+                this.toggleButtons.forEach(btn => {
+                    btn.addEventListener('click', (e) => this.toggleView(e.target.dataset.view));
+                });
+
+                // Markdown editor events
+                this.markdownEditor.addEventListener('input', () => {
+                    this.isEditing = true;
+                    this.editSaveBtn.style.display = 'flex';
+                });
+            }
+
+            handleDragOver(e) {
+                e.preventDefault();
+                this.uploadArea.classList.add('dragover');
+            }
+
+            handleDragLeave(e) {
+                e.preventDefault();
+                this.uploadArea.classList.remove('dragover');
+            }
+
+            handleDrop(e) {
+                e.preventDefault();
+                this.uploadArea.classList.remove('dragover');
+
+                const files = e.dataTransfer.files;
+                if (files.length > 0) {
+                    this.processFile(files[0]);
+                }
+            }
+
+            handleFileSelect(e) {
+                const files = e.target.files;
+                if (files.length > 0) {
+                    this.processFile(files[0]);
+                }
+            }
+
+            processFile(file) {
+                // Validate file
+                const maxSize = 10 * 1024 * 1024; // 10MB
+                if (file.size > maxSize) {
+                    this.showError('File quá lớn. Kích thước tối đa là 10MB.');
+                    return;
+                }
+
+                const allowedTypes = ['application/pdf', 'text/plain', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+                if (!allowedTypes.includes(file.type)) {
+                    this.showError('Loại file không được hỗ trợ. Chỉ chấp nhận PDF, TXT, DOC, DOCX.');
+                    return;
+                }
+
+                this.currentFile = file;
+                this.currentFilename = file.name;
+                this.showFileInfo(file);
+                this.hideMessages();
+            }
+
+            showFileInfo(file) {
+                const fileName = document.getElementById('file-name');
+                const fileSize = document.getElementById('file-size');
+                const fileIcon = document.getElementById('file-icon');
+
+                fileName.textContent = file.name;
+                fileSize.textContent = this.formatFileSize(file.size);
+
+                // Set appropriate icon
+                const extension = file.name.split('.').pop().toLowerCase();
+                const iconMap = {
+                    'pdf': 'fa-file-pdf',
+                    'txt': 'fa-file-alt',
+                    'doc': 'fa-file-word',
+                    'docx': 'fa-file-word'
+                };
+                fileIcon.className = `fas ${iconMap[extension] || 'fa-file'}`;
+
+                this.fileInfo.classList.add('show');
+                this.convertButton.disabled = false;
+            }
+
+            formatFileSize(bytes) {
+                if (bytes === 0) return '0 Bytes';
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            }
+
+            async convertDocument() {
+                if (!this.currentFile) return;
+
+                this.showProcessing();
+                this.convertButton.disabled = true;
+
+                // Start progress simulation
+                this.simulateProgress();
+
+                const formData = new FormData();
+                formData.append('file', this.currentFile);
+
+                try {
+                    const response = await fetch('/api/convert', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        this.currentMarkdown = result.markdown_content;
+                        this.showPreview(result.markdown_content);
+                        this.showSuccess(`Chuyển đổi thành công! Phương thức: ${result.processing_method}`);
+                        this.actionButtons.classList.add('show');
+                    } else {
+                        this.showError(result.error || 'Chuyển đổi thất bại');
+                    }
+
+                } catch (error) {
+                    console.error('Conversion error:', error);
+                    this.showError('Lỗi kết nối. Vui lòng thử lại.');
+                } finally {
+                    this.hideProcessing();
+                    this.convertButton.disabled = false;
+                }
+            }
+
+            simulateProgress() {
+                const steps = document.querySelectorAll('.step');
+                const progressFill = document.querySelector('.progress-fill');
+                let currentStep = 1;
+
+                const progressInterval = setInterval(() => {
+                    if (currentStep <= 4) {
+                        // Update step
+                        steps.forEach((step, index) => {
+                            if (index + 1 < currentStep) {
+                                step.classList.add('completed');
+                                step.classList.remove('active');
+                            } else if (index + 1 === currentStep) {
+                                step.classList.add('active');
+                                step.classList.remove('completed');
+                            } else {
+                                step.classList.remove('active', 'completed');
+                            }
+                        });
+
+                        // Update progress bar
+                        const progress = (currentStep / 4) * 100;
+                        progressFill.style.width = progress + '%';
+
+                        currentStep++;
+                    } else {
+                        clearInterval(progressInterval);
+                    }
+                }, 800);
+            }
+
+            showPreview(markdown) {
+                this.currentMarkdown = markdown;
+                this.previewContent.innerHTML = marked.parse(markdown);
+                this.markdownEditor.value = markdown;
+                this.isEditing = false;
+                this.editSaveBtn.style.display = 'none';
+            }
+
+            toggleView(view) {
+                this.currentView = view;
+                
+                // Update toggle buttons
+                this.toggleButtons.forEach(btn => {
+                    btn.classList.toggle('active', btn.dataset.view === view);
+                });
+
+                // Show/hide content
+                if (view === 'html') {
+                    this.previewContent.style.display = 'block';
+                    this.rawEditContent.style.display = 'none';
+                } else {
+                    this.previewContent.style.display = 'none';
+                    this.rawEditContent.style.display = 'block';
+                    // Update editor content if needed
+                    if (!this.isEditing) {
+                        this.markdownEditor.value = this.currentMarkdown;
+                    }
+                }
+            }
+
+            saveMarkdownChanges() {
+                const editedContent = this.markdownEditor.value;
+                this.currentMarkdown = editedContent;
+                
+                // Update HTML preview
+                this.previewContent.innerHTML = marked.parse(editedContent);
+                
+                // Hide save button
+                this.isEditing = false;
+                this.editSaveBtn.style.display = 'none';
+                
+                // Show success message
+                this.showSuccess('Đã lưu thay đổi!');
+            }
+
+            async saveToRawDataMd() {
+                if (!this.currentMarkdown || !this.currentFilename) {
+                    this.showError('Không có nội dung để lưu');
+                    return;
+                }
+
+                try {
+                    const response = await fetch('/api/save-markdown', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({
+                            filename: this.currentFilename.replace(/\.[^/.]+$/, ''), // Remove extension
+                            content: this.currentMarkdown
+                        })
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        this.showSuccess(result.message);
+                    } else {
+                        this.showError(result.error || 'Lưu file thất bại');
+                    }
+
+                } catch (error) {
+                    console.error('Save error:', error);
+                    this.showError('Lỗi kết nối khi lưu file');
+                }
+            }
+
+            downloadMarkdown() {
+                if (!this.currentMarkdown || !this.currentFilename) {
+                    this.showError('Không có nội dung để tải');
+                    return;
+                }
+
+                const blob = new Blob([this.currentMarkdown], { type: 'text/markdown' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = this.currentFilename.replace(/\.[^/.]+$/, '') + '.md';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                this.showSuccess('File đã được tải xuống!');
+            }
+
+            showProcessing() {
+                this.processingStatus.classList.add('show');
+                this.hideMessages();
+            }
+
+            hideProcessing() {
+                this.processingStatus.classList.remove('show');
+            }
+
+            showError(message) {
+                this.errorMessage.textContent = message;
+                this.errorMessage.classList.add('show');
+                this.successMessage.classList.remove('show');
+            }
+
+            showSuccess(message) {
+                this.successMessage.textContent = message;
+                this.successMessage.classList.add('show');
+                this.errorMessage.classList.remove('show');
+            }
+
+            hideMessages() {
+                this.errorMessage.classList.remove('show');
+                this.successMessage.classList.remove('show');
+            }
+        }
+
+        // Smooth navigation function
+        function smoothNavigate(url) {
+            // Add slide-out effect
+            const container = document.querySelector('.converter-container');
+            container.style.animation = 'slideOutLeft 0.6s cubic-bezier(0.55, 0.085, 0.68, 0.53) forwards';
+            
+            // Navigate after animation
+            setTimeout(() => {
+                window.location.href = url;
+            }, 600);
+            
+            return false; // Prevent default link behavior
+        }
+
+        // Initialize the converter
+        document.addEventListener('DOMContentLoaded', () => {
+            new DocumentConverter();
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+.venv
+__pycache__
+*.pyc
+*.pyo
+*.pyd
+.DS_Store
+.git
+.gitignore
+uv.lock
+pyproject.toml
+README*
+LICENSE
+docling_extract_ALL.py
+install_vietnamese_ocr.py
+railway.json

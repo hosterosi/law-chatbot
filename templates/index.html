@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trợ lý luật pháp Kiểm sát  | Legal Assistant</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Playfair+Display:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+</head>
+<body>
+    <div class="app-wrapper">
+        <!-- Background Elements -->
+        <div class="background-elements">
+            <div class="bg-circle bg-circle-1"></div>
+            <div class="bg-circle bg-circle-2"></div>
+            <div class="bg-circle bg-circle-3"></div>
+        </div>
+        
+        <!-- Main Content Container -->
+        <div class="main-content">
+            <!-- Left Side - Avatar and Static Welcome Message -->
+            <div class="image-section">
+                <div class="round-image-container">
+                    <div class="round-image-frame">
+                        <img src="{{ url_for('static', filename='avatar.jpg') }}" 
+                             alt="Legal Assistant Avatar" 
+                             class="round-image"
+                             id="main-avatar">
+                    </div>
+                </div>
+                <!-- Static Welcome Message -->
+                <div class="welcome-message">
+                    <div class="welcome-content">
+                        <h3>Chào mừng bạn! 👋</h3>
+                        <p><em>🌟 Phát triển bởi <strong>Hoàng Yến</strong> 🌟</em></p>
+                        <p>Tôi có thể giúp bạn phân tích tài liệu, tư vấn hợp đồng, và tra cứu thông tin pháp lý.</p>
+                        <p><strong>Hãy đặt câu hỏi để bắt đầu!</strong></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Side - Chat Interface -->
+            <div class="chat-section">
+                <!-- Main Chat Container -->
+                <div class="chat-container">
+                    <!-- Header -->
+                    <div class="chat-header">
+                        <div class="header-content">
+                            <div class="logo-section">
+                                <div class="logo-icon">
+                                    <i class="fas fa-balance-scale"></i>
+                                </div>
+                                <div class="logo-text">
+                                    <h1>Trợ lý luật pháp Kiểm sát </h1>
+                                    <p>Legal Assistant AI - Phát triển bởi Hoàng Yến</p>
+                                </div>
+                            </div>
+                            <div class="status-indicator">
+                                <div class="status-dot"></div>
+                                <span>Trực tuyến</span>
+                                <div class="header-nav">
+                                    <a href="/convert" class="nav-btn" title="Chuyển đổi tài liệu">
+                                        <i class="fas fa-file-upload"></i>
+                                    </a>
+                                    <a href="/explorer" class="nav-btn" title="Quản lý file">
+                                        <i class="fas fa-folder-open"></i>
+                                    </a>
+                                </div>
+                                <button id="clear-chat-btn" class="clear-chat-button" title="Xóa lịch sử trò chuyện">
+                                    <i class="fas fa-broom"></i>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Document Status Area -->
+                    <div class="document-status-section">
+                        <div class="status-container">
+                            <div class="status-info">
+                                <div class="status-icon">
+                                    <i class="fas fa-file-upload"></i>
+                                </div>
+                                <div class="status-content">
+                                    <h3>📄 Chuyển đổi tài liệu</h3>
+                                    <p>Chuyển đổi và xử lý các tài liệu PDF, DOC, TXT sang định dạng Markdown</p>
+                                    <button class="data-analysis-btn" id="convert-document-btn">
+                                        <i class="fas fa-file-upload"></i>
+                                        <span>Chuyển đổi tài liệu</span>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Chat Messages Area -->
+                    <div class="chat-messages-container">
+                        <div class="chat-messages" id="chat-messages">
+                            <!-- Initial empty state can be added here if needed -->
+                        </div>
+                    </div>
+
+                    <!-- Chat Input Area -->
+                    <div class="chat-input-container">
+                        <div class="input-wrapper">
+                            <div class="input-group">
+                                <input type="text" id="question" placeholder="Nhập câu hỏi về tài liệu đã tải lên..." autocomplete="off" maxlength="500">
+                                <button id="ask-button" disabled>
+                                    <i class="fas fa-paper-plane"></i>
+                                </button>
+                            </div>
+                            <div class="input-footer">
+                                <div class="character-count">
+                                    <span id="char-count">0</span>/500
+                                </div>
+                                <div class="input-suggestions">
+                                    <button class="suggestion-btn" data-text="Phân tích nội dung chính của tài liệu">
+                                        <i class="fas fa-file-contract"></i> Phân tích tài liệu
+                                    </button>
+                                    <button class="suggestion-btn" data-text="Tóm tắt các điểm quan trọng">
+                                        <i class="fas fa-list-ul"></i> Tóm tắt nội dung
+                                    </button>
+                                    <button class="suggestion-btn" data-text="Tìm các rủi ro pháp lý trong tài liệu">
+                                        <i class="fas fa-exclamation-triangle"></i> Phân tích rủi ro
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer Sitemap -->
+        <footer class="footer-sitemap">
+            <div class="footer-content">
+                <div class="sitemap-section">
+                    <div class="sitemap-column">
+                        <h4>Sản phẩm</h4>
+                        <ul>
+                            <li><a href="#chat">Trò chuyện AI</a></li>
+                            <li><a href="/convert">Chuyển đổi tài liệu</a></li>
+                            <li><a href="/explorer">Quản lý file</a></li>
+                            <li><a href="#consultation">Tư vấn trực tuyến</a></li>
+                        </ul>
+                    </div>
+                    <div class="sitemap-column">
+                        <h4>Dịch vụ</h4>
+                        <ul>
+                            <li><a href="#contract">Soạn thảo hợp đồng</a></li>
+                            <li><a href="#review">Kiểm tra văn bản</a></li>
+                            <li><a href="#research">Nghiên cứu pháp luật</a></li>
+                            <li><a href="#compliance">Tuân thủ quy định</a></li>
+                        </ul>
+                    </div>
+                    <div class="sitemap-column">
+                        <h4>Hỗ trợ</h4>
+                        <ul>
+                            <li><a href="#help">Trung tâm trợ giúp</a></li>
+                            <li><a href="#guide">Hướng dẫn sử dụng</a></li>
+                            <li><a href="#faq">Câu hỏi thường gặp</a></li>
+                            <li><a href="#contact">Liên hệ</a></li>
+                        </ul>
+                    </div>
+                    <div class="sitemap-column">
+                        <h4>Pháp lý</h4>
+                        <ul>
+                            <li><a href="#privacy">Chính sách bảo mật</a></li>
+                            <li><a href="#terms">Điều khoản sử dụng</a></li>
+                            <li><a href="#security">Bảo mật dữ liệu</a></li>
+                            <li><a href="#compliance">Tuân thủ GDPR</a></li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="footer-bottom">
+                    <div class="attribution">
+                        <p>Made with <i class="fas fa-heart"></i> by <strong>hosterosi</strong></p>
+                    </div>
+                    <div class="footer-links">
+                        <a href="#about">Về chúng tôi</a>
+                        <a href="#blog">Blog</a>
+                        <a href="#careers">Tuyển dụng</a>
+                        <a href="#press">Báo chí</a>
+                    </div>
+                </div>
+            </div>
+        </footer>
+
+        <!-- Loading Overlay -->
+        <div class="loading-overlay" id="loading-overlay">
+            <div class="loading-spinner">
+                <div class="spinner"></div>
+                <p>Đang phân tích tài liệu...</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class LegalAssistantChat {
+            constructor() {
+                this.askButton = document.getElementById('ask-button');
+                this.questionInput = document.getElementById('question');
+                this.chatMessages = document.getElementById('chat-messages');
+                this.charCount = document.getElementById('char-count');
+                this.loadingOverlay = document.getElementById('loading-overlay');
+                this.suggestionBtns = document.querySelectorAll('.suggestion-btn');
+                this.clearChatBtn = document.getElementById('clear-chat-btn');
+                this.convertDocumentBtn = document.getElementById('convert-document-btn');
+                
+                // Conversation history management
+                this.conversationHistory = [];
+                this.maxHistoryLength = 20; // Keep last 20 exchanges
+                
+                this.initEventListeners();
+            }
+
+            initEventListeners() {
+                this.askButton.addEventListener('click', () => this.askQuestion());
+                this.questionInput.addEventListener('keypress', (e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault();
+                        this.askQuestion();
+                    }
+                });
+                
+                this.questionInput.addEventListener('input', (e) => {
+                    this.updateCharCount(e.target.value.length);
+                    this.updateSendButton();
+                });
+
+                this.suggestionBtns.forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const text = e.currentTarget.dataset.text;
+                        this.questionInput.value = text;
+                        this.updateCharCount(text.length);
+                        this.updateSendButton();
+                        this.questionInput.focus();
+                    });
+                });
+
+                this.clearChatBtn.addEventListener('click', () => {
+                    this.clearChat();
+                });
+
+                this.convertDocumentBtn.addEventListener('click', () => {
+                    this.navigateToConvert();
+                });
+            }
+
+            updateCharCount(count) {
+                this.charCount.textContent = count;
+                this.charCount.style.color = count > 450 ? '#dc3545' : count > 400 ? '#ffc107' : '#6c757d';
+            }
+
+            updateSendButton() {
+                const hasText = this.questionInput.value.trim().length > 0;
+                this.askButton.disabled = !hasText;
+                this.askButton.classList.toggle('active', hasText);
+            }
+
+            async askQuestion() {
+                const question = this.questionInput.value.trim();
+                if (!question) return;
+
+                this.appendMessage(question, 'user-message');
+                this.questionInput.value = '';
+                this.updateCharCount(0);
+                this.updateSendButton();
+
+                // Add user question to conversation history
+                this.addToConversationHistory('user', question);
+
+                const botMessageElement = this.appendMessage('', 'bot-message');
+                const messageTextElement = botMessageElement.querySelector('.message-text');
+                let fullResponse = '';
+
+                try {
+                    // Always use enhanced RAG with conversation history
+                    const response = await fetch('/ask-enhanced', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ 
+                            question: question,
+                            conversation_history: this.conversationHistory
+                        })
+                    });
+
+                    if (!response.ok) {
+                        throw new Error(`HTTP error! status: ${response.status}`);
+                    }
+
+                    const reader = response.body.getReader();
+                    const decoder = new TextDecoder();
+
+                    while (true) {
+                        const { done, value } = await reader.read();
+                        if (done) break;
+
+                        const chunk = decoder.decode(value, { stream: true });
+                        const lines = chunk.split('\n\n');
+
+                        for (const line of lines) {
+                            if (line.startsWith('data:')) {
+                                const data = line.substring(5).trim();
+                                if (data) {
+                                    try {
+                                        const parsed = JSON.parse(data);
+                                        if (parsed.token) {
+                                            fullResponse += parsed.token;
+                                            messageTextElement.innerHTML = marked.parse(fullResponse + ' ▌'); // Add a cursor
+                                            this.scrollToBottom();
+                                        } else if (parsed.error) {
+                                            messageTextElement.innerHTML = `<p class="error">⚠️ ${parsed.error}</p>`;
+                                            this.scrollToBottom();
+                                            return;
+                                        }
+                                    } catch (e) {
+                                        console.error("Failed to parse JSON from stream:", data);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    // Final render without the cursor
+                    messageTextElement.innerHTML = marked.parse(fullResponse);
+                    
+                    // Add assistant response to conversation history
+                    this.addToConversationHistory('assistant', fullResponse);
+
+                } catch (error) {
+                    console.error('Error:', error);
+                    const errorMessage = '⚠️ Xin lỗi, đã có lỗi xảy ra.';
+                    messageTextElement.innerHTML += `<br><p class="error">${errorMessage}</p>`;
+                    
+                    // Add error to conversation history
+                    this.addToConversationHistory('assistant', errorMessage);
+                } finally {
+                    this.scrollToBottom();
+                }
+            }
+
+            appendMessage(text, className) {
+                const messageWrapper = document.createElement('div');
+                messageWrapper.className = `message ${className}`;
+                
+                if (className.includes('user-message')) {
+                    messageWrapper.innerHTML = `
+                        <div class="message-content">
+                            <div class="message-text">${this.escapeHtml(text)}</div>
+                        </div>
+                        <div class="message-avatar">
+                            <i class="fas fa-user"></i>
+                        </div>
+                    `;
+                } else {
+                    messageWrapper.innerHTML = `
+                        <div class="message-avatar">
+                            <i class="fas fa-robot"></i>
+                        </div>
+                        <div class="message-content">
+                            <div class="message-text">${marked.parse(text)}</div>
+                            <div class="message-time">${new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</div>
+                        </div>
+                    `;
+                }
+
+                this.chatMessages.appendChild(messageWrapper);
+                this.scrollToBottom();
+                return messageWrapper;
+            }
+
+            scrollToBottom() {
+                this.chatMessages.scrollTop = this.chatMessages.scrollHeight;
+            }
+
+            escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            addToConversationHistory(role, message) {
+                // Clean the message (remove markdown for storage, keep original for display)
+                const cleanMessage = message.replace(/[*_`#>\-+]/g, '').trim();
+                
+                // Find the last exchange or create a new one
+                let lastExchange = this.conversationHistory[this.conversationHistory.length - 1];
+                
+                if (role === 'user') {
+                    // Always create a new exchange for user messages
+                    this.conversationHistory.push({ user: cleanMessage });
+                } else if (role === 'assistant' && lastExchange && !lastExchange.assistant) {
+                    // Add assistant response to the current exchange
+                    lastExchange.assistant = cleanMessage;
+                } else {
+                    // Fallback: create new exchange (shouldn't normally happen)
+                    this.conversationHistory.push({ assistant: cleanMessage });
+                }
+                
+                // Maintain history length limit
+                if (this.conversationHistory.length > this.maxHistoryLength) {
+                    this.conversationHistory = this.conversationHistory.slice(-this.maxHistoryLength);
+                }
+                
+                // Debug: log conversation history (remove in production)
+                console.log('Conversation History:', this.conversationHistory);
+            }
+
+            clearConversationHistory() {
+                this.conversationHistory = [];
+                console.log('Conversation history cleared');
+            }
+
+            clearChat() {
+                // Clear conversation history
+                this.clearConversationHistory();
+                
+                // Clear chat messages from UI
+                this.chatMessages.innerHTML = '';
+                
+                // Show confirmation
+                const confirmationMessage = this.appendMessage('🧹 **Đã xóa lịch sử trò chuyện.** Bạn có thể bắt đầu cuộc trò chuyện mới!', 'bot-message');
+                
+                // Auto-remove confirmation message after 3 seconds
+                setTimeout(() => {
+                    if (confirmationMessage && confirmationMessage.parentNode) {
+                        confirmationMessage.remove();
+                    }
+                }, 3000);
+            }
+
+            navigateToConvert() {
+                // Add visual feedback
+                this.convertDocumentBtn.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+                this.convertDocumentBtn.innerHTML = '<i class="fas fa-check"></i><span>Đang chuyển hướng...</span>';
+                
+                // Add smooth transition effect
+                document.body.style.overflow = 'hidden';
+                
+                // Create transition overlay
+                const overlay = document.createElement('div');
+                overlay.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    z-index: 10000;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    opacity: 0;
+                    transition: opacity 0.5s ease;
+                `;
+                
+                overlay.innerHTML = `
+                    <div style="text-align: center; color: white;">
+                        <div style="font-size: 3rem; margin-bottom: 20px; animation: pulse 1s infinite;">
+                            <i class="fas fa-file-upload"></i>
+                        </div>
+                        <h2 style="margin-bottom: 10px;">Đang chuyển đến trang chuyển đổi...</h2>
+                        <p style="opacity: 0.8;">Chuyển đổi tài liệu sang Markdown</p>
+                    </div>
+                `;
+                
+                document.body.appendChild(overlay);
+                
+                // Trigger the fade in
+                setTimeout(() => {
+                    overlay.style.opacity = '1';
+                }, 10);
+                
+                // Navigate after animation
+                setTimeout(() => {
+                    window.location.href = '/convert';
+                }, 1500);
+                
+                // Reset button after 1 second
+                setTimeout(() => {
+                    this.convertDocumentBtn.style.background = 'linear-gradient(135deg, #3b82f6, #1d4ed8)';
+                    this.convertDocumentBtn.innerHTML = '<i class="fas fa-file-upload"></i><span>Chuyển đổi tài liệu</span>';
+                }, 1000);
+            }
+        }
+
+        // Initialize the chat application
+        let legalChat;
+        document.addEventListener('DOMContentLoaded', () => {
+            legalChat = new LegalAssistantChat();
+        });
+    </script>
+</body>
+</html>
